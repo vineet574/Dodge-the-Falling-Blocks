@@ -8,23 +8,28 @@ WIDTH, HEIGHT = 500, 600
 PLAYER_WIDTH, PLAYER_HEIGHT = 50, 10
 BLOCK_WIDTH, BLOCK_HEIGHT = 40, 40
 PLAYER_SPEED = 7
-BLOCK_SPEED = 5
+BLOCK_SPEED_BASE = 5
 POWER_UP_TIME = 5
+GRAVITY = 1
 
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
+YELLOW = (255, 255, 0)
+CYAN = (0, 255, 255)
 BACKGROUND_COLOR = (200, 200, 255)
 
 jump_sound = pygame.mixer.Sound("jump.wav")
 score_sound = pygame.mixer.Sound("score.wav")
 power_up_sound = pygame.mixer.Sound("powerup.wav")
+pygame.mixer.music.load("background.mp3")
+pygame.mixer.music.play(-1)  # Loop music
+music_muted = False
 
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Dodge the Falling Blocks")
 clock = pygame.time.Clock()
-start_time = time.time()
 
 paused = False
 highest_score = 0
@@ -37,6 +42,8 @@ class Player:
         self.height = PLAYER_HEIGHT
         self.invincible = False
         self.invincibility_timer = 0
+        self.is_jumping = False
+        self.y_velocity = 0
 
     def move(self, keys):
         if keys[pygame.K_LEFT] and self.x > 0:
@@ -44,8 +51,22 @@ class Player:
         if keys[pygame.K_RIGHT] and self.x < WIDTH - self.width:
             self.x += PLAYER_SPEED
 
+        if not self.is_jumping and keys[pygame.K_SPACE]:
+            self.is_jumping = True
+            self.y_velocity = -15
+            jump_sound.play()
+
+        if self.is_jumping:
+            self.y += self.y_velocity
+            self.y_velocity += GRAVITY
+            if self.y >= HEIGHT - 50:
+                self.y = HEIGHT - 50
+                self.is_jumping = False
+                self.y_velocity = 0
+
     def draw(self):
-        pygame.draw.rect(screen, BLUE if not self.invincible else RED, (self.x, self.y, self.width, self.height))
+        color = BLUE if not self.invincible else RED
+        pygame.draw.rect(screen, color, (self.x, self.y, self.width, self.height))
 
 class Block:
     def __init__(self):
@@ -53,9 +74,13 @@ class Block:
         self.y = -BLOCK_HEIGHT
         self.width = BLOCK_WIDTH
         self.height = BLOCK_HEIGHT
+        self.speed = BLOCK_SPEED_BASE
 
-    def fall(self, score):
-        self.y += BLOCK_SPEED + (score // 10)
+    def fall(self, score, slow=False):
+        speed = self.speed + (score // 10)
+        if slow:
+            speed = max(1, speed // 2)
+        self.y += speed
 
     def draw(self):
         pygame.draw.rect(screen, RED, (self.x, self.y, self.width, self.height))
@@ -73,29 +98,39 @@ class Block:
 
 class PowerUp:
     def __init__(self):
-        self.x = random.randint(100, WIDTH - 100)
-        self.y = random.randint(100, HEIGHT - 100)
+        self.x = random.randint(50, WIDTH - 50)
+        self.y = random.randint(50, HEIGHT - 200)
         self.active = True
+        self.type = random.choice(['invincible', 'slow_blocks'])
 
     def draw(self):
         if self.active:
-            pygame.draw.circle(screen, (255, 255, 0), (self.x, self.y), 15)
+            if self.type == 'invincible':
+                pygame.draw.circle(screen, YELLOW, (self.x, self.y), 15)
+            else:
+                pygame.draw.circle(screen, CYAN, (self.x, self.y), 15)
 
     def check_collision(self, player):
-        if self.active and abs(player.x - self.x) < 20 and abs(player.y - self.y) < 20:
+        if self.active and abs(player.x + player.width // 2 - self.x) < 25 and abs(player.y + player.height // 2 - self.y) < 25:
             self.active = False
-            player.invincible = True
-            player.invincibility_timer = POWER_UP_TIME
             power_up_sound.play()
+            if self.type == 'invincible':
+                player.invincible = True
+                player.invincibility_timer = POWER_UP_TIME
+                return None
+            elif self.type == 'slow_blocks':
+                return 'slow'
+        return None
 
 def game_loop():
-    global highest_score
+    global highest_score, music_muted
     player = Player()
     blocks = []
     power_up = PowerUp()
     running = True
     score = 0
     font = pygame.font.Font(None, 36)
+    slow_blocks_timer = 0
 
     while running:
         global paused
@@ -107,6 +142,13 @@ def game_loop():
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_p:
                     paused = not paused
+                if event.key == pygame.K_m:
+                    if music_muted:
+                        pygame.mixer.music.unpause()
+                        music_muted = False
+                    else:
+                        pygame.mixer.music.pause()
+                        music_muted = True
 
         if paused:
             pause_text = font.render("Paused! Press P to resume.", True, BLACK)
@@ -114,14 +156,19 @@ def game_loop():
             pygame.display.update()
             continue
 
-        player.move(pygame.key.get_pressed())
+        keys = pygame.key.get_pressed()
+        player.move(keys)
         player.draw()
 
         if random.randint(1, 50) == 1:
             blocks.append(Block())
 
+        slow = slow_blocks_timer > 0
+        if slow_blocks_timer > 0:
+            slow_blocks_timer -= 1 / 30  # decrease timer per frame
+
         for block in blocks[:]:
-            block.fall(score)
+            block.fall(score, slow)
             block.draw()
             if block.off_screen():
                 blocks.remove(block)
@@ -130,11 +177,21 @@ def game_loop():
             if block.check_collision(player):
                 running = False
 
-        power_up.draw(screen)
-        power_up.check_collision(player)
+        power_up.draw()
+        pu_effect = power_up.check_collision(player)
+        if pu_effect == 'slow':
+            slow_blocks_timer = POWER_UP_TIME
+
+        if player.invincible:
+            player.invincibility_timer -= 1 / 30
+            if player.invincibility_timer <= 0:
+                player.invincible = False
 
         score_text = font.render(f"Score: {score}", True, BLACK)
         screen.blit(score_text, (10, 10))
+
+        mute_text = font.render(f"Press M to {'Unmute' if music_muted else 'Mute'} Music", True, BLACK)
+        screen.blit(mute_text, (10, HEIGHT - 30))
 
         pygame.display.update()
         clock.tick(30)
@@ -153,7 +210,7 @@ def game_over(score):
         game_over_text = font.render("Game Over", True, RED)
         score_text = font.render(f"Score: {score}", True, BLACK)
         high_score_text = font.render(f"High Score: {highest_score}", True, BLACK)
-        
+
         screen.blit(game_over_text, (WIDTH // 2 - 80, HEIGHT // 2 - 80))
         screen.blit(score_text, (WIDTH // 2 - 100, HEIGHT // 2 - 20))
         screen.blit(high_score_text, (WIDTH // 2 - 100, HEIGHT // 2 + 20))
@@ -165,14 +222,14 @@ def game_over(score):
             if event.type == pygame.QUIT:
                 pygame.quit()
                 return
-            
+
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_r:
                     game_loop()
                 elif event.key == pygame.K_q:
                     pygame.quit()
                     return
-        
+
         pygame.display.update()
 
 game_loop()
