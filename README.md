@@ -12,3 +12,14 @@ Score: Score increases for every block the player successfully dodges.
 
 Game Over: The game displays a "Game Over" screen with the final score.
 ✅ Power-Up System: Randomly appearing boosts that temporarily increase speed or make the player invincible. ✅ Difficulty Scaling: Blocks fall faster as the score increases. ✅ Animated Background: Smooth color transitions for a dynamic look. ✅ Pause & Resume: Press P to pause and R to resume. ✅ Leaderboards: Keeps track of the highest score.
+Press SPACE to jump.
+
+Press M to mute/unmute background music.
+
+Press P to pause/unpause.
+
+Yellow power-up = invincibility, cyan = slows blocks.
+
+Blocks speed increases every 10 points.
+
+Player turns red while invincible.
