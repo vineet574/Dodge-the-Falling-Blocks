@@ -23,3 +23,27 @@ Yellow power-up = invincibility, cyan = slows blocks.
 Blocks speed increases every 10 points.
 
 Player turns red while invincible.
+Existing Features:
+Player Movement & Jumping (with gravity)
+
+Falling Blocks with increasing speed based on score
+
+Collision Detection (player-block & player-powerup)
+
+Power-Ups:
+
+Invincibility (red player)
+
+Slowed falling blocks
+
+Jump Sound, Score Sound, Power-up Sound
+
+Background Music with mute/unmute toggle (M key)
+
+Pause/Resume (P key)
+
+Score Tracking and High Score Saving to high_score.txt
+
+Game Over Screen with restart (R) or quit (Q) options
+
+Color-coded visuals (invincibility, power-ups, etc.)
